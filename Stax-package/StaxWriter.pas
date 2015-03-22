@@ -712,12 +712,24 @@ end;
 
 procedure TXmlStreamWriter.close;
 begin
-     RaiseNYI;
+     //RaiseNYI;
 end;
 
 procedure TXmlStreamWriter.flush;
+var
+   vScope: TStaxScope;
 begin
-     RaiseNYI;
+     //RaiseNYI;
+
+     vScope:=LastElementScope;
+
+     if Assigned(vScope)
+     then
+     begin
+          WriteElementScope(vScope as TElementScope);
+     end;
+
+     { TODO : Need to to check and write all scopes. }
 end;
 
 function TXmlStreamWriter.getPrefix(uri: String): String;
