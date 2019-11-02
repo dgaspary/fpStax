@@ -242,9 +242,9 @@ end;
 
 procedure TDomStaxWriter.WriteToStream;
 begin
-     FStaxWriter.writeStartDocument(FXmlEncoding, FXmlVersion);
+     FStaxWriter.WriteStartDocument(FXmlEncoding, FXmlVersion);
      WriteElement(FDoc.DocumentElement);
-     FStaxWriter.writeEndDocument;
+     FStaxWriter.WriteEndDocument;
 end;
 
 end.

@@ -1,6 +1,6 @@
 { This file is part of the fpStax.
 
-  Copyright (C) 2013-2015 Daniel F. Gaspary https://github.com/dgaspary
+  Copyright (C) 2013-2019 Daniel F. Gaspary https://github.com/dgaspary
 
   See the file COPYING.modifiedLGPL.txt, included in this distribution,
   for details about the copyright.
@@ -40,16 +40,31 @@ interface
 uses
   Classes, SysUtils;
 
+type
 
-function XmlFormatName(Prefix, Localname: String): String;
-function XmlFormatElementStart(Prefix, Localname: String; Empty, ClosingBracket: boolean): String;
-function XmlFormatElementStartClosing(Empty: boolean): string;
-function XmlFormatElementEnd(Prefix, Localname: String): String;
-function XmlFormatAttribute(Prefix, Localname, Value: String): String;
+    { TStaxFormatting }
+
+    TStaxFormatting = class
+      class function FormatName(Prefix, Localname: String): String; virtual;
+
+      class function AfterDocumentStart: string; virtual;
+
+      class function AfterElementStart: string; virtual;
+      class function FormatElementStart(Prefix, Localname: String; Empty, ClosingBracket: boolean): String; virtual;
+      class function FormatElementStartClosing(Empty: boolean): string; virtual;
+
+      class function AfterElementEnd: string; virtual;
+      class function FormatElementEnd(Prefix, Localname: String): String; virtual;
+
+      class function AfterAttribute: string; virtual;
+      class function FormatAttribute(Prefix, Localname, Value: String): String; virtual;
+    end;
+
+    TStaxFormattingClass = class of TStaxFormatting;
 
 implementation
 
-function XmlFormatName(Prefix, Localname: String): String;
+class function TStaxFormatting.FormatName(Prefix, Localname: String): String;
 var
    vPrefix: String;
 begin
@@ -62,19 +77,29 @@ begin
      Result:=Format('%s%s', [vPrefix, localname]);
 end;
 
-function XmlFormatElementStart(Prefix, Localname: String; Empty,
+class function TStaxFormatting.AfterDocumentStart: string;
+begin
+     Result:='';
+end;
+
+class function TStaxFormatting.AfterElementStart: string;
+begin
+     Result:='';
+end;
+
+class function TStaxFormatting.FormatElementStart(Prefix, Localname: String; Empty,
   ClosingBracket: boolean): String;
 begin
-     Result:='<' + XmlFormatName(Prefix, Localname);
+     Result:='<' + FormatName(Prefix, Localname);
 
      if ClosingBracket
      then
      begin
-          Result+=XmlFormatElementStartClosing(Empty);
+          Result+=FormatElementStartClosing(Empty);
      end;
 end;
 
-function XmlFormatElementStartClosing(Empty: boolean): string;
+class function TStaxFormatting.FormatElementStartClosing(Empty: boolean): string;
 begin
      if Empty
      then
@@ -83,16 +108,31 @@ begin
          Result:='';
 
      Result+='>';
+
+     Result+=AfterElementStart;
 end;
 
-function XmlFormatElementEnd(Prefix, Localname: String): String;
+class function TStaxFormatting.AfterElementEnd: string;
 begin
-     Result:='</' + XmlFormatName(Prefix, Localname) + '>';
+     Result:='';
 end;
 
-function XmlFormatAttribute(Prefix, Localname, Value: String): String;
+class function TStaxFormatting.FormatElementEnd(Prefix, Localname: String): String;
 begin
-     Result:=Format('%s="%s"', [XmlFormatName(Prefix, Localname), Value]);
+     Result:='</' + FormatName(Prefix, Localname) + '>';
+     Result:=Result + AfterElementEnd;
+end;
+
+class function TStaxFormatting.AfterAttribute: string;
+begin
+     Result:='';
+end;
+
+class function TStaxFormatting.FormatAttribute(Prefix, Localname, Value: String): String;
+begin
+     Result:=Format('%s="%s"', [FormatName(Prefix, Localname), Value]);
+
+     Result:=Result + AfterAttribute;
 end;
 
 

@@ -170,6 +170,7 @@ type
     TXmlStreamWriter = class
     private
            FDefaultNamespace: TNamespaceBinding;
+           FFormatting: TStaxFormattingClass;
            FRepairingNamespaces: boolean;
            FRootBindings: TNamespaceBindingList;
 
@@ -204,6 +205,7 @@ type
              LocalName: String; Empty: boolean);
            function LastElementScope: TElementScope;
            procedure RaiseNamespaceUriNotBound;
+
            function WithinElementScope(out ElementScope: TElementScope
              ): boolean;
            function WithinElementScope: boolean;
@@ -211,7 +213,7 @@ type
            procedure WriteElementScope(ElementScope: TElementScope);
            procedure WriteElementScope_End(ElementScope: TElementScope);
 
-           procedure WriteToStream(text: String);
+           procedure WriteToStream(text: UTF8String);
     public
           constructor Create(OutputStream: TStream);
           destructor Destroy; override;
@@ -224,35 +226,36 @@ type
           procedure setDefaultNamespace(uri: String); virtual;
           procedure setNamespaceContext(context: TNameSpaceContext); virtual;
           procedure setPrefix(prefix, uri: String); virtual;
-          procedure writeAttribute(localName, value: String); virtual;
-          procedure writeAttribute(namespaceURI, localName, value: String); virtual;
-          procedure WriteAttribute(prefix, namespaceURI, localName, value: String); virtual;
+          procedure WriteAttribute(localName, value: String); virtual;
+          procedure WriteAttribute(namespaceURI, localName, value: String); virtual;
+          procedure WriteAttribute(prefix, namespaceURI, localName, value: UTF8String); virtual;
           procedure writeCData(data: String); virtual; abstract;
           procedure WriteCharacters(text: array of char; start, len: integer); virtual;
-          procedure WriteCharacters(text: String); virtual;
+          procedure WriteCharacters(text: UTF8String); virtual;
           procedure writeComment(data: String); virtual; abstract;
           procedure WriteDefaultNamespace(namespaceURI: String); virtual;
           procedure writeDTD(dtd: String); virtual; abstract;
           procedure WriteEmptyElement(localName: String); virtual;
           procedure WriteEmptyElement(namespaceURI, localName: String); virtual;
           procedure WriteEmptyElement(prefix, namespaceURI, localName: String); virtual;
-          procedure writeEndDocument; virtual;
+          procedure WriteEndDocument; virtual;
 
-          procedure WriteEndElement; virtual;
+          procedure WriteEndElement; virtual; { TODO : Criar parâmetro para número de "fechamentos". E outro booleano: "Todos abertos" }
 
           procedure writeEntityRef(name: String); virtual; abstract;
           procedure writeNamespace(prefix, namespaceURI: String); virtual; abstract;
           procedure writeProcessingInstruction(target: String); virtual; abstract;
           procedure writeProcessingInstruction(data, target: String); virtual; abstract;
-          procedure writeStartDocument; virtual;
-          procedure writeStartDocument(version: String); virtual;
-          procedure writeStartDocument(encoding, version: String); virtual;
+          procedure WriteStartDocument; virtual;
+          procedure WriteStartDocument(version: String); virtual;
+          procedure WriteStartDocument(encoding, version: String); virtual;
 
           procedure WriteStartElement(LocalName: String); virtual;
           procedure WriteStartElement(NamespaceURI, LocalName: String); virtual;
           procedure WriteStartElement(Prefix, NamespaceURI, LocalName: String); virtual;
 
           property RepairingNamespaces: boolean read FRepairingNamespaces write FRepairingNamespaces;
+          property Formatting: TStaxFormattingClass read FFormatting write FFormatting;
     end;
 
 
@@ -553,7 +556,7 @@ begin
           then
               vPrefix:='';
 
-          Result:=XmlFormatElementStart(vPrefix, Name, Empty, false);
+          Result:=FFormatting.FormatElementStart(vPrefix, Name, Empty, false);
      end;
 end;
 
@@ -570,7 +573,7 @@ begin
           then
               vPrefix:='';
 
-          Result:=XmlFormatElementEnd(vPrefix, Name);
+          Result:=FFormatting.FormatElementEnd(vPrefix, Name);
      end;
 end;
 
@@ -578,7 +581,7 @@ function TXmlStreamWriter.FormatAttribute(AttScope: TAttributeScope
   ): StaxString;
 begin
      with AttScope do
-          Result:=XmlFormatAttribute(GetPrefix, Name, Value);
+          Result:=FFormatting.FormatAttribute(GetPrefix, Name, Value);
 end;
 
 function TXmlStreamWriter.CreateNamedScope(Prefix, NamespaceURI,
@@ -683,6 +686,8 @@ constructor TXmlStreamWriter.Create(OutputStream: TStream);
 begin
      FStream:=OutputStream;
 
+     FFormatting:=TStaxFormatting;
+
      with TXmlConstants do
           FDefaultNamespace:=TNamespaceBinding.Create(XML_NS_URI, XML_NS_PREFIX);
 
@@ -784,7 +789,7 @@ begin
          CreateAttributeScope(TXmlConstants.XMLNS_ATTRIBUTE, '', prefix, uri);
 end;
 
-procedure TXmlStreamWriter.writeAttribute(localName, value: String);
+procedure TXmlStreamWriter.WriteAttribute(localName, value: String);
 var
    binding: TNamespaceBinding;
 begin
@@ -794,7 +799,7 @@ begin
           WriteAttribute(Prefix, Uri, localName, value);
 end;
 
-procedure TXmlStreamWriter.writeAttribute(namespaceURI, localName, value: String
+procedure TXmlStreamWriter.WriteAttribute(namespaceURI, localName, value: String
   );
 begin
      WriteAttribute('somePrefix', namespaceURI, localName, value);
@@ -871,11 +876,12 @@ begin
 end;
 
 procedure TXmlStreamWriter.WriteAttribute(prefix, namespaceURI, localName,
-  value: String);
+  value: UTF8String);
 var
    ElementScope, AttScope: TElementScope;
    binding: TNamespaceBinding;
    bindingCreated: boolean;
+   s: UTF8String;
 begin
      ElementScope:=LastElementScope;
 
@@ -890,7 +896,9 @@ begin
      then
          CreateAttributeScope(TXmlConstants.XMLNS_ATTRIBUTE, '', binding.Prefix, NamespaceURI);
 
-     CreateAttributeScope(prefix, namespaceURI, localName, value);
+     s:=ConvChars(value);
+
+     CreateAttributeScope(prefix, namespaceURI, localName, s);
 end;
 
 procedure TXmlStreamWriter.WriteCharacters(text: array of char; start,
@@ -905,10 +913,13 @@ const
      cQuote = '&quot;';
      cLt = '&lt;';
      cGt = '&gt;';
+     ccedil = '&ccedil;';
+     ccedil_ = '&Ccedil;';
+     cOtilde = '&otilde;';
 var
 
    i: integer;
-   c: Char;
+   c: string; //char
 
    s: string;
 begin
@@ -923,6 +934,10 @@ begin
                '''': s:=cQuote; { TODO : Double quotes? }
                '<': s:=cLt;
                '>': s:=cGt;
+               'ç': s:=ccedil;
+               'Ç': s:=cCedil_;
+               'õ': s:=cOtilde;
+
                else s:=c;
           end;
 
@@ -930,9 +945,11 @@ begin
      end;
 end;
 
-procedure TXmlStreamWriter.WriteCharacters(text: String);
+procedure TXmlStreamWriter.WriteCharacters(text: UTF8String);
 var
    ParentScope: TElementScope;
+   s: string;
+
 begin
      ParentScope:=LastElementScope;
 
@@ -942,7 +959,13 @@ begin
           WriteElementScope(ParentScope);
      end;
 
-     WriteToStream(ConvChars(text));
+     s:=ConvChars(text);
+
+     if s=text
+     then
+         WriteToStream(text)
+     else
+         WriteToStream(s);
 end;
 
 procedure TXmlStreamWriter.WriteDefaultNamespace(namespaceURI: String);
@@ -985,7 +1008,7 @@ begin
      CreateElementScope(Prefix, NamespaceURI, LocalName, ParentScope, true);}
 end;
 
-procedure TXmlStreamWriter.writeEndDocument;
+procedure TXmlStreamWriter.WriteEndDocument;
 var
    e: TElementScope;
 begin
@@ -1022,21 +1045,22 @@ begin
      FScopesList.Remove(scope);
 end;
 
-procedure TXmlStreamWriter.writeStartDocument;
+procedure TXmlStreamWriter.WriteStartDocument;
 begin
-     writeStartDocument(XML_DEFAULT_ENCODING, XML_DEFAULT_VERSION);
+     WriteStartDocument(XML_DEFAULT_ENCODING, XML_DEFAULT_VERSION);
 end;
 
-procedure TXmlStreamWriter.writeStartDocument(version: String);
+procedure TXmlStreamWriter.WriteStartDocument(version: String);
 begin
-     writeStartDocument(XML_DEFAULT_ENCODING, version);
+     WriteStartDocument(XML_DEFAULT_ENCODING, version);
 end;
 
-procedure TXmlStreamWriter.writeStartDocument(encoding, version: String);
+procedure TXmlStreamWriter.WriteStartDocument(encoding, version: String);
 var
    s: string;
 begin
      s:=Format('<?xml version="%s" encoding="%s"?>', [version, encoding]);
+     s+=FFormatting.AfterDocumentStart;
      WriteToStream(s);
 end;
 
@@ -1056,7 +1080,7 @@ begin
           then
               vPrefix:='';
 
-          s:=' ' + XmlFormatAttribute(vPrefix, Name, Value);
+          s:=' ' + FFormatting.FormatAttribute(vPrefix, Name, Value);
      end;
 
      WriteToStream(s);
@@ -1157,6 +1181,8 @@ begin
          s:='';
      s+='>';
 
+     s+=FFormatting.AfterElementStart;
+
      WriteToStream(s);
 
      ElementScope.written:=true;
@@ -1173,7 +1199,7 @@ begin
      WriteToStream(FormatEndElement(ElementScope));
 end;
 
-procedure TXmlStreamWriter.WriteToStream(text: String);
+procedure TXmlStreamWriter.WriteToStream(text: UTF8String);
 begin
      FStream.WriteBuffer(PChar(text)^, Length(text));
 end;
